@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WeatherNow — Live Weather</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --sky: #0a0f1e;
+    --sky2: #0d1b3e;
+    --accent: #4fc3f7;
+    --gold: #ffd54f;
+    --coral: #ff7043;
+    --glass: rgba(255,255,255,0.05);
+    --glass-border: rgba(255,255,255,0.1);
+    --text: #e8f4fd;
+    --muted: rgba(232,244,253,0.5);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--sky);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Animated sky background ── */
+  .sky-bg {
+    position: fixed; inset: 0; z-index: 0;
+    background: linear-gradient(160deg, #020818 0%, #0a1628 40%, #0d2347 70%, #0a1628 100%);
+    overflow: hidden;
+  }
+  .star { position: absolute; border-radius: 50%; background: white; animation: twinkle var(--d,3s) ease-in-out infinite; }
+  @keyframes twinkle { 0%,100%{opacity:.2;transform:scale(1)} 50%{opacity:.9;transform:scale(1.4)} }
+  .cloud {
+    position: absolute;
+    border-radius: 60px;
+    background: rgba(255,255,255,0.04);
+    filter: blur(40px);
+    animation: drift var(--cd,40s) linear infinite;
+  }
+  @keyframes drift { from{transform:translateX(-200px)} to{transform:translateX(110vw)} }
+
+  /* ── Pages ── */
+  .page { position: relative; z-index: 1; min-height: 100vh; display:none; }
+  .page.active { display:flex; }
+
+  /* ── Auth Pages ── */
+  #auth-page {
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    padding: 20px;
+  }
+
+  .brand {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+  .brand h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(3rem,8vw,5rem);
+    letter-spacing: 0.08em;
+    background: linear-gradient(135deg, var(--accent) 0%, #80deea 50%, var(--gold) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+  }
+  .brand p {
+    font-family: 'Space Mono', monospace;
+    font-size: .75rem;
+    letter-spacing: .25em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-top: 6px;
+  }
+
+  .auth-card {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(20px);
+    border-radius: 20px;
+    padding: 40px 36px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+  }
+
+  .tab-row {
+    display: flex;
+    background: rgba(255,255,255,0.04);
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 30px;
+    gap: 4px;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: .9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .25s;
+  }
+  .tab-btn.active {
+    background: var(--accent);
+    color: #000;
+    box-shadow: 0 4px 20px rgba(79,195,247,.35);
+  }
+
+  .form-panel { display:none; }
+  .form-panel.active { display:block; }
+
+  .form-group { margin-bottom: 18px; }
+  .form-group label {
+    display: block;
+    font-size: .8rem;
+    font-weight: 500;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .form-group input {
+    width: 100%;
+    padding: 13px 16px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: .95rem;
+    outline: none;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .form-group input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(79,195,247,0.15);
+  }
+  .form-group input::placeholder { color: rgba(255,255,255,0.2); }
+
+  .btn-primary {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--accent), #0288d1);
+    border: none;
+    border-radius: 10px;
+    color: #000;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .25s;
+    letter-spacing: .02em;
+    margin-top: 8px;
+  }
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(79,195,247,.4);
+  }
+  .btn-primary:active { transform: translateY(0); }
+
+  .msg {
+    margin-top: 14px;
+    font-size: .85rem;
+    text-align: center;
+    min-height: 20px;
+    border-radius: 6px;
+    padding: 0 8px;
+  }
+  .msg.error { color: #ff6b6b; }
+  .msg.success { color: #69db7c; }
+
+  /* ── Weather App Page ── */
+  #app-page {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Nav */
+  .nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--glass-border);
+    background: rgba(10,15,30,0.7);
+    backdrop-filter: blur(20px);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .nav-brand {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.6rem;
+    letter-spacing: .12em;
+    background: linear-gradient(90deg, var(--accent), var(--gold));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .nav-right { display:flex; align-items:center; gap:16px; }
+  .user-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 100px;
+    padding: 6px 14px 6px 8px;
+  }
+  .user-avatar {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--gold));
+    display:flex; align-items:center; justify-content:center;
+    font-size: .85rem; font-weight: 700; color: #000;
+  }
+  .user-name { font-size: .85rem; font-weight: 500; }
+  .btn-logout {
+    padding: 8px 18px;
+    background: rgba(255,112,67,.15);
+    border: 1px solid rgba(255,112,67,.3);
+    border-radius: 8px;
+    color: var(--coral);
+    font-family: 'DM Sans', sans-serif;
+    font-size: .85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn-logout:hover { background: rgba(255,112,67,.3); }
+
+  /* Search */
+  .search-section {
+    padding: 40px 32px 0;
+    max-width: 720px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  .search-label {
+    font-family: 'Space Mono', monospace;
+    font-size: .7rem;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+    display: block;
+  }
+  .search-bar {
+    display: flex;
+    gap: 10px;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    padding: 6px 6px 6px 20px;
+    backdrop-filter: blur(10px);
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .search-bar:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(79,195,247,0.1);
+  }
+  .search-bar input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1rem;
+    font-weight: 400;
+  }
+  .search-bar input::placeholder { color: var(--muted); }
+  .btn-search {
+    padding: 12px 24px;
+    background: linear-gradient(135deg, var(--accent), #0288d1);
+    border: none;
+    border-radius: 10px;
+    color: #000;
+    font-family: 'DM Sans', sans-serif;
+    font-size: .9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all .2s;
+    letter-spacing: .02em;
+    white-space: nowrap;
+  }
+  .btn-search:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(79,195,247,.4); }
+
+  /* Weather display */
+  .weather-display {
+    padding: 30px 32px 60px;
+    max-width: 720px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  /* Loading */
+  .loader {
+    text-align: center;
+    padding: 60px 20px;
+    display: none;
+  }
+  .loader-ring {
+    width: 48px; height: 48px;
+    border: 3px solid rgba(79,195,247,.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+    margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loader p { color: var(--muted); font-size: .9rem; letter-spacing: .05em; }
+
+  /* Main weather card */
+  .weather-main {
+    display: none;
+    animation: fadeUp .5s ease forwards;
+  }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+
+  .city-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .city-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(2.5rem, 6vw, 4rem);
+    letter-spacing: .05em;
+    line-height: 1;
+    color: var(--text);
+  }
+  .city-country {
+    font-size: .85rem;
+    color: var(--muted);
+    letter-spacing: .05em;
+    margin-top: 4px;
+    font-family: 'Space Mono', monospace;
+  }
+  .timestamp {
+    font-family: 'Space Mono', monospace;
+    font-size: .7rem;
+    color: var(--muted);
+    text-align: right;
+    letter-spacing: .05em;
+    line-height: 1.8;
+  }
+
+  /* Hero card */
+  .hero-card {
+    border-radius: 20px;
+    padding: 36px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--glass-border);
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .hero-card::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: var(--card-gradient, linear-gradient(135deg,rgba(79,195,247,.1),rgba(2,136,209,.05)));
+    z-index: 0;
+  }
+  .hero-card > * { position: relative; z-index: 1; }
+
+  .weather-icon-wrap {
+    font-size: 5rem;
+    line-height: 1;
+    filter: drop-shadow(0 0 20px rgba(79,195,247,.3));
+    animation: float 4s ease-in-out infinite;
+  }
+  @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+
+  .temp-block { flex: 1; }
+  .temp-big {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(4rem, 10vw, 6.5rem);
+    line-height: 1;
+    letter-spacing: -.02em;
+    background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .temp-feel {
+    color: var(--muted);
+    font-size: .85rem;
+    margin-top: 4px;
+  }
+  .desc-text {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--text);
+    text-transform: capitalize;
+    margin-top: 6px;
+  }
+
+  /* Stats grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    padding: 20px;
+    backdrop-filter: blur(10px);
+    transition: transform .2s, border-color .2s;
+  }
+  .stat-card:hover { transform: translateY(-3px); border-color: rgba(79,195,247,.3); }
+  .stat-icon { font-size: 1.4rem; margin-bottom: 10px; }
+  .stat-label {
+    font-size: .7rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    margin-bottom: 4px;
+  }
+  .stat-value {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text);
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: .04em;
+  }
+
+  /* Extra info strip */
+  .info-strip {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    padding: 20px 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    backdrop-filter: blur(10px);
+    margin-bottom: 20px;
+  }
+  .info-item { flex: 1; min-width: 120px; }
+  .info-label {
+    font-size: .7rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    margin-bottom: 4px;
+  }
+  .info-val { font-size: .95rem; font-weight: 600; }
+
+  /* Hourly (fake) forecast */
+  .forecast-title {
+    font-family: 'Space Mono', monospace;
+    font-size: .7rem;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .hourly-row {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.1) transparent;
+  }
+  .hour-card {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    text-align: center;
+    min-width: 70px;
+    flex-shrink: 0;
+    backdrop-filter: blur(10px);
+    transition: border-color .2s;
+  }
+  .hour-card:hover { border-color: rgba(79,195,247,.4); }
+  .hour-time { font-size: .7rem; color: var(--muted); font-family: 'Space Mono', monospace; margin-bottom: 6px; }
+  .hour-icon { font-size: 1.2rem; margin-bottom: 6px; }
+  .hour-temp { font-size: .9rem; font-weight: 600; }
+
+  /* Error */
+  .error-msg {
+    display: none;
+    text-align: center;
+    padding: 50px 20px;
+  }
+  .error-msg .err-icon { font-size: 3rem; margin-bottom: 12px; }
+  .error-msg p { color: var(--muted); font-size: .95rem; }
+  .error-msg strong { color: var(--coral); display: block; font-size: 1.1rem; margin-bottom: 8px; }
+
+  /* Quick city chips */
+  .quick-cities {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .city-chip {
+    padding: 6px 14px;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 100px;
+    font-size: .8rem;
+    cursor: pointer;
+    transition: all .2s;
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+  }
+  .city-chip:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Responsive */
+  @media (max-width: 520px) {
+    .nav { padding: 14px 16px; }
+    .search-section, .weather-display { padding-left: 16px; padding-right: 16px; }
+    .hero-card { padding: 24px; }
+    .weather-icon-wrap { font-size: 3.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Animated Background -->
+<div class="sky-bg" id="skyBg"></div>
+
+<!-- ════════════════════════════════
+     AUTH PAGE
+════════════════════════════════ -->
+<div class="page active" id="auth-page">
+  <div class="brand">
+    <h1>WeatherNow</h1>
+    <p>Real-time weather intelligence</p>
+  </div>
+
+  <div class="auth-card">
+    <div class="tab-row">
+      <button class="tab-btn active" onclick="switchTab('login')">Sign In</button>
+      <button class="tab-btn" onclick="switchTab('signup')">Sign Up</button>
+    </div>
+
+    <!-- Login -->
+    <div class="form-panel active" id="panel-login">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="you@example.com">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="••••••••">
+      </div>
+      <button class="btn-primary" onclick="handleLogin()">Sign In →</button>
+      <div class="msg" id="login-msg"></div>
+    </div>
+
+    <!-- Signup -->
+    <div class="form-panel" id="panel-signup">
+      <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" id="signup-name" placeholder="Alex Johnson">
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="signup-email" placeholder="you@example.com">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="signup-password" placeholder="min 6 characters">
+      </div>
+      <button class="btn-primary" onclick="handleSignup()">Create Account →</button>
+      <div class="msg" id="signup-msg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     APP PAGE
+════════════════════════════════ -->
+<div class="page" id="app-page">
+  <nav class="nav">
+    <div class="nav-brand">WeatherNow</div>
+    <div class="nav-right">
+      <div class="user-badge">
+        <div class="user-avatar" id="avatarInitial">A</div>
+        <span class="user-name" id="navUserName">User</span>
+      </div>
+      <button class="btn-logout" onclick="handleLogout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="search-section">
+    <span class="search-label">Search city weather</span>
+    <div class="search-bar">
+      <input type="text" id="cityInput" placeholder="Enter city name… e.g. Tokyo, Paris, Mumbai" onkeydown="if(event.key==='Enter')fetchWeather()">
+      <button class="btn-search" onclick="fetchWeather()">Get Weather</button>
+    </div>
+    <div class="quick-cities">
+      <span class="city-chip" onclick="quickSearch('Mumbai')">🇮🇳 Mumbai</span>
+      <span class="city-chip" onclick="quickSearch('London')">🇬🇧 London</span>
+      <span class="city-chip" onclick="quickSearch('New York')">🇺🇸 New York</span>
+      <span class="city-chip" onclick="quickSearch('Tokyo')">🇯🇵 Tokyo</span>
+      <span class="city-chip" onclick="quickSearch('Paris')">🇫🇷 Paris</span>
+      <span class="city-chip" onclick="quickSearch('Dubai')">🇦🇪 Dubai</span>
+      <span class="city-chip" onclick="quickSearch('Sydney')">🇦🇺 Sydney</span>
+    </div>
+  </div>
+
+  <div class="weather-display">
+    <!-- Loader -->
+    <div class="loader" id="loader">
+      <div class="loader-ring"></div>
+      <p>Fetching weather data…</p>
+    </div>
+
+    <!-- Error -->
+    <div class="error-msg" id="errorBox">
+      <div class="err-icon">⛈️</div>
+      <strong id="errorText">City not found</strong>
+      <p>Please check the city name and try again.</p>
+    </div>
+
+    <!-- Weather output -->
+    <div class="weather-main" id="weatherMain">
+      <div class="city-header">
+        <div>
+          <div class="city-name" id="wcity">—</div>
+          <div class="city-country" id="wcountry"></div>
+        </div>
+        <div class="timestamp" id="wtimestamp"></div>
+      </div>
+
+      <!-- Hero -->
+      <div class="hero-card" id="heroCard">
+        <div class="weather-icon-wrap" id="wicon">🌤️</div>
+        <div class="temp-block">
+          <div class="temp-big" id="wtemp">—°C</div>
+          <div class="desc-text" id="wdesc">—</div>
+          <div class="temp-feel" id="wfeel"></div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-icon">💧</div><div class="stat-label">Humidity</div><div class="stat-value" id="whumidity">—</div></div>
+        <div class="stat-card"><div class="stat-icon">💨</div><div class="stat-label">Wind Speed</div><div class="stat-value" id="wwind">—</div></div>
+        <div class="stat-card"><div class="stat-icon">🌡️</div><div class="stat-label">Pressure</div><div class="stat-value" id="wpressure">—</div></div>
+        <div class="stat-card"><div class="stat-icon">👁️</div><div class="stat-label">Visibility</div><div class="stat-value" id="wvisibility">—</div></div>
+      </div>
+
+      <!-- Info strip -->
+      <div class="info-strip">
+        <div class="info-item"><div class="info-label">Sunrise</div><div class="info-val" id="wsunrise">—</div></div>
+        <div class="info-item"><div class="info-label">Sunset</div><div class="info-val" id="wsunset">—</div></div>
+        <div class="info-item"><div class="info-label">Min Temp</div><div class="info-val" id="wmin">—</div></div>
+        <div class="info-item"><div class="info-label">Max Temp</div><div class="info-val" id="wmax">—</div></div>
+        <div class="info-item"><div class="info-label">Cloudiness</div><div class="info-val" id="wclouds">—</div></div>
+      </div>
+
+      <!-- Hourly forecast (AI-generated from real data) -->
+      <div class="forecast-title">Hourly Outlook (Simulated)</div>
+      <div class="hourly-row" id="hourlyRow"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════
+//  SKY BACKGROUND
+// ════════════════════════════════
+(function buildSky() {
+  const bg = document.getElementById('skyBg');
+  for (let i = 0; i < 80; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const size = Math.random() * 2.5 + 0.5;
+    s.style.cssText = `width:${size}px;height:${size}px;top:${Math.random()*100}%;left:${Math.random()*100}%;--d:${(Math.random()*4+2).toFixed(1)}s;animation-delay:${(Math.random()*4).toFixed(1)}s`;
+    bg.appendChild(s);
+  }
+  for (let i = 0; i < 4; i++) {
+    const c = document.createElement('div');
+    c.className = 'cloud';
+    c.style.cssText = `width:${Math.random()*300+150}px;height:${Math.random()*80+40}px;top:${Math.random()*60+5}%;left:-300px;--cd:${(Math.random()*30+30).toFixed(0)}s;animation-delay:${(Math.random()*20).toFixed(0)}s`;
+    bg.appendChild(c);
+  }
+})();
+
+// ════════════════════════════════
+//  USER STORE (localStorage)
+// ════════════════════════════════
+const USERS_KEY = 'weathernow_users';
+const SESSION_KEY = 'weathernow_session';
+
+function getUsers() { return JSON.parse(localStorage.getItem(USERS_KEY) || '{}'); }
+function saveUsers(u) { localStorage.setItem(USERS_KEY, JSON.stringify(u)); }
+function getSession() { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); }
+function setSession(u) { localStorage.setItem(SESSION_KEY, JSON.stringify(u)); }
+function clearSession() { localStorage.removeItem(SESSION_KEY); }
+
+// ════════════════════════════════
+//  TABS
+// ════════════════════════════════
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', (tab==='login'&&i===0)||(tab==='signup'&&i===1)));
+  document.getElementById('panel-login').classList.toggle('active', tab==='login');
+  document.getElementById('panel-signup').classList.toggle('active', tab==='signup');
+}
+
+// ════════════════════════════════
+//  AUTH
+// ════════════════════════════════
+function showMsg(id, text, type='error') {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'msg ' + type;
+}
+
+function handleSignup() {
+  const name = document.getElementById('signup-name').value.trim();
+  const email = document.getElementById('signup-email').value.trim().toLowerCase();
+  const pass = document.getElementById('signup-password').value;
+  if (!name) return showMsg('signup-msg', 'Please enter your name.');
+  if (!email || !email.includes('@')) return showMsg('signup-msg', 'Enter a valid email.');
+  if (pass.length < 6) return showMsg('signup-msg', 'Password must be at least 6 characters.');
+  const users = getUsers();
+  if (users[email]) return showMsg('signup-msg', 'Account already exists. Sign in instead.');
+  users[email] = { name, email, pass };
+  saveUsers(users);
+  showMsg('signup-msg', 'Account created! Signing you in…', 'success');
+  setTimeout(() => launchApp({ name, email }), 800);
+}
+
+function handleLogin() {
+  const email = document.getElementById('login-email').value.trim().toLowerCase();
+  const pass = document.getElementById('login-password').value;
+  if (!email) return showMsg('login-msg', 'Enter your email.');
+  const users = getUsers();
+  if (!users[email]) return showMsg('login-msg', 'No account found. Sign up first.');
+  if (users[email].pass !== pass) return showMsg('login-msg', 'Incorrect password.');
+  showMsg('login-msg', 'Welcome back!', 'success');
+  setTimeout(() => launchApp(users[email]), 500);
+}
+
+function launchApp(user) {
+  setSession(user);
+  document.getElementById('navUserName').textContent = user.name.split(' ')[0];
+  document.getElementById('avatarInitial').textContent = user.name[0].toUpperCase();
+  document.getElementById('auth-page').classList.remove('active');
+  document.getElementById('app-page').classList.add('active');
+}
+
+function handleLogout() {
+  clearSession();
+  // Reset
+  document.getElementById('weatherMain').style.display = 'none';
+  document.getElementById('errorBox').style.display = 'none';
+  document.getElementById('cityInput').value = '';
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-password').value = '';
+  document.getElementById('login-msg').textContent = '';
+  document.getElementById('app-page').classList.remove('active');
+  document.getElementById('auth-page').classList.add('active');
+  switchTab('login');
+}
+
+// ════════════════════════════════
+//  AUTO LOGIN FROM SESSION
+// ════════════════════════════════
+(function autoLogin() {
+  const s = getSession();
+  if (s) launchApp(s);
+})();
+
+// ════════════════════════════════
+//  WEATHER API
+// ════════════════════════════════
+const API_KEY = 'bd5e378503939ddaee76f12ad7a97608'; // demo key from openweathermap
+const BASE = 'https://api.openweathermap.org/data/2.5/weather';
+
+function quickSearch(city) {
+  document.getElementById('cityInput').value = city;
+  fetchWeather();
+}
+
+async function fetchWeather() {
+  const city = document.getElementById('cityInput').value.trim();
+  if (!city) return;
+
+  document.getElementById('weatherMain').style.display = 'none';
+  document.getElementById('errorBox').style.display = 'none';
+  document.getElementById('loader').style.display = 'block';
+
+  try {
+    const res = await fetch(`${BASE}?q=${encodeURIComponent(city)}&appid=${API_KEY}&units=metric`);
+    const data = await res.json();
+    document.getElementById('loader').style.display = 'none';
+
+    if (data.cod !== 200) {
+      document.getElementById('errorText').textContent = data.message || 'City not found';
+      document.getElementById('errorBox').style.display = 'block';
+      return;
+    }
+
+    renderWeather(data);
+  } catch(e) {
+    document.getElementById('loader').style.display = 'none';
+    document.getElementById('errorText').textContent = 'Network error. Check connection.';
+    document.getElementById('errorBox').style.display = 'block';
+  }
+}
+
+function getWeatherEmoji(id, icon) {
+  const isDay = icon && icon.endsWith('d');
+  if (id >= 200 && id < 300) return '⛈️';
+  if (id >= 300 && id < 400) return '🌦️';
+  if (id >= 500 && id < 600) return id === 511 ? '🌨️' : (id < 502 ? '🌧️' : '⛈️');
+  if (id >= 600 && id < 700) return '❄️';
+  if (id === 701||id===741) return '🌫️';
+  if (id === 800) return isDay ? '☀️' : '🌙';
+  if (id === 801) return isDay ? '🌤️' : '🌥️';
+  if (id === 802) return '⛅';
+  if (id >= 803) return '☁️';
+  return '🌡️';
+}
+
+function getCardGradient(id) {
+  if (id >= 200 && id < 300) return 'linear-gradient(135deg,rgba(100,100,180,.15),rgba(50,50,100,.08))';
+  if (id >= 500 && id < 600) return 'linear-gradient(135deg,rgba(60,130,200,.15),rgba(30,80,160,.08))';
+  if (id >= 600 && id < 700) return 'linear-gradient(135deg,rgba(200,230,255,.12),rgba(150,200,255,.06))';
+  if (id === 800) return 'linear-gradient(135deg,rgba(255,213,79,.12),rgba(255,160,0,.06))';
+  return 'linear-gradient(135deg,rgba(79,195,247,.10),rgba(2,136,209,.05))';
+}
+
+function fmtTime(unix, tz) {
+  const d = new Date((unix + tz) * 1000);
+  return d.toUTCString().slice(17,22);
+}
+
+function renderWeather(d) {
+  const id = d.weather[0].id;
+  const icon = d.weather[0].icon;
+  const tz = d.timezone;
+
+  // Header
+  document.getElementById('wcity').textContent = d.name;
+  document.getElementById('wcountry').textContent = `${d.sys.country} · ${d.coord.lat.toFixed(2)}°N, ${d.coord.lon.toFixed(2)}°E`;
+
+  const now = new Date();
+  document.getElementById('wtimestamp').innerHTML =
+    `${now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'})}<br>
+     ${now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`;
+
+  // Hero
+  document.getElementById('wicon').textContent = getWeatherEmoji(id, icon);
+  document.getElementById('wtemp').textContent = `${Math.round(d.main.temp)}°C`;
+  document.getElementById('wdesc').textContent = d.weather[0].description;
+  document.getElementById('wfeel').textContent = `Feels like ${Math.round(d.main.feels_like)}°C`;
+  document.getElementById('heroCard').style.setProperty('--card-gradient', getCardGradient(id));
+
+  // Stats
+  document.getElementById('whumidity').textContent = `${d.main.humidity}%`;
+  document.getElementById('wwind').textContent = `${d.wind.speed} m/s`;
+  document.getElementById('wpressure').textContent = `${d.main.pressure} hPa`;
+  document.getElementById('wvisibility').textContent = d.visibility ? `${(d.visibility/1000).toFixed(1)} km` : 'N/A';
+
+  // Strip
+  document.getElementById('wsunrise').textContent = fmtTime(d.sys.sunrise, tz);
+  document.getElementById('wsunset').textContent = fmtTime(d.sys.sunset, tz);
+  document.getElementById('wmin').textContent = `${Math.round(d.main.temp_min)}°C`;
+  document.getElementById('wmax').textContent = `${Math.round(d.main.temp_max)}°C`;
+  document.getElementById('wclouds').textContent = `${d.clouds.all}%`;
+
+  // Simulated hourly
+  const base = Math.round(d.main.temp);
+  const hours = [];
+  const now2 = new Date();
+  const emojis = ['☀️','⛅','🌤️','☁️','🌧️','❄️'];
+  const pick = getWeatherEmoji(id, icon);
+  for (let i = 1; i <= 8; i++) {
+    const h = new Date(now2.getTime() + i * 3600000);
+    const t = base + Math.round((Math.random()-0.5)*6);
+    hours.push(`
+      <div class="hour-card">
+        <div class="hour-time">${h.getHours().toString().padStart(2,'0')}:00</div>
+        <div class="hour-icon">${pick}</div>
+        <div class="hour-temp">${t}°C</div>
+      </div>`);
+  }
+  document.getElementById('hourlyRow').innerHTML = hours.join('');
+
+  document.getElementById('weatherMain').style.display = 'block';
+  setTimeout(() => { document.getElementById('weatherMain').style.animation = 'none'; document.getElementById('weatherMain').style.animation = 'fadeUp .5s ease forwards'; }, 10);
+}
+</script>
+</body>
+</html>
